@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://poq6j8kr1t82"]
+
+[ext_resource type="Script" path="res://csharp/dummy/DummyPlayerMachine.cs" id="1_kxw15"]
+
+[node name="DummyPlayerMachine" type="Node2D"]
+script = ExtResource("1_kxw15")

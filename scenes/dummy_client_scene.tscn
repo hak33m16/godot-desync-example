@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://djrdmnuxvxv4n"]
+
+[ext_resource type="Script" path="res://csharp/dummy/DummyClient.cs" id="1_q4cd1"]
+[ext_resource type="Script" path="res://csharp/dummy/DummyInputHandler.cs" id="3_j03jq"]
+
+[node name="DummyClientScene" type="Node2D"]
+
+[node name="Client" type="Node" parent="." node_paths=PackedStringArray("inputHandler")]
+script = ExtResource("1_q4cd1")
+inputHandler = NodePath("../InputHandler")
+
+[node name="InputHandler" type="Node" parent="."]
+script = ExtResource("3_j03jq")
+
+[node name="Players" type="Node" parent="."]
