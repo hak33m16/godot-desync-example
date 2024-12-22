@@ -8,7 +8,10 @@ The server is not yet authoritative, so desyncs in the simulation are permanent
 
 ## Development
 
-First, run the server:
+First, build the repo:
+- `dotnet build`
+
+Then, run the server:
 - `<your-godot-mono-binary> scenes/dummy_server_scene.tscn --headless`
 
 Keep the server running, and then run the client:
