@@ -4,6 +4,10 @@ using Godot;
 
 public partial class DummyPlayerMachine : Node
 {
+    public static PackedScene playerScene = GD.Load<PackedScene>(
+        "res://scenes/prefabs/dummy_player.tscn"
+    );
+
     public const int ATTACK_DURATION_TICKS = 120;
     public const int ATTACK_COOLDOWN_TICKS = 120;
 
@@ -11,6 +15,7 @@ public partial class DummyPlayerMachine : Node
     {
         Idle,
         Attacking,
+        Walking,
     }
 
     public PlayerState state = PlayerState.Idle;
@@ -18,6 +23,19 @@ public partial class DummyPlayerMachine : Node
     private bool input_attemptAttack = false;
     private int attackDurationRemaining = 0;
     private int global_attackCooldownRemaining = 0;
+
+    private float X { get; set; } = 0;
+    private float Y { get; set; } = 0;
+    private float Speed { get; set; } = 4.0f;
+
+    [Export]
+    private Node player;
+
+    public DummyPlayerMachine()
+    {
+        player = playerScene.Instantiate();
+        AddChild(player);
+    }
 
     public override void _PhysicsProcess(double delta)
     {
@@ -102,12 +120,29 @@ public partial class DummyPlayerMachine : Node
         }
     }
 
+    public override void _Process(double delta)
+    {
+        player.GetNode<Node2D>("Node2D").Position = new Vector2(X, Y);
+    }
+
     public void HandleAction(PlayerAction action)
     {
         switch (action)
         {
             case PlayerAction.Attack:
                 input_attemptAttack = true;
+                break;
+            case PlayerAction.WalkNorth:
+                Y -= Speed;
+                break;
+            case PlayerAction.WalkEast:
+                X += Speed;
+                break;
+            case PlayerAction.WalkSouth:
+                Y += Speed;
+                break;
+            case PlayerAction.WalkWest:
+                X -= Speed;
                 break;
         }
     }

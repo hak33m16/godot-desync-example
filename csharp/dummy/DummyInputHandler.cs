@@ -14,5 +14,29 @@ public partial class DummyInputHandler : Node
             playerMachine.HandleAction(DummyShared.PlayerAction.Attack);
             playerClient.SendPlayerAction(DummyShared.PlayerAction.Attack);
         }
+
+        if (Input.IsActionPressed("walk_north"))
+        {
+            playerMachine.HandleAction(DummyShared.PlayerAction.WalkNorth);
+            playerClient.SendPlayerAction(DummyShared.PlayerAction.WalkNorth);
+        }
+
+        if (Input.IsActionPressed("walk_east"))
+        {
+            playerMachine.HandleAction(DummyShared.PlayerAction.WalkEast);
+            playerClient.SendPlayerAction(DummyShared.PlayerAction.WalkEast);
+        }
+
+        if (Input.IsActionPressed("walk_south"))
+        {
+            playerMachine.HandleAction(DummyShared.PlayerAction.WalkSouth);
+            playerClient.SendPlayerAction(DummyShared.PlayerAction.WalkSouth);
+        }
+
+        if (Input.IsActionPressed("walk_west"))
+        {
+            playerMachine.HandleAction(DummyShared.PlayerAction.WalkWest);
+            playerClient.SendPlayerAction(DummyShared.PlayerAction.WalkWest);
+        }
     }
 }

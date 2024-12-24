@@ -8,7 +8,7 @@ using LiteNetLib.Utils;
 
 public partial class DummyClient : Node, INetEventListener
 {
-    public static PackedScene playerScene = GD.Load<PackedScene>(
+    public static PackedScene playerMachineScene = GD.Load<PackedScene>(
         "res://scenes/dummy_player_machine.tscn"
     );
 
@@ -91,7 +91,7 @@ public partial class DummyClient : Node, INetEventListener
         ticksElapsed = packet.serverTicksElapsed;
         joined = true;
 
-        playerMachine = playerScene.Instantiate() as DummyPlayerMachine;
+        playerMachine = playerMachineScene.Instantiate() as DummyPlayerMachine;
         GetNode("../Players").AddChild(playerMachine);
         GetTree().Root.PrintTree();
 

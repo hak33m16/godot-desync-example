@@ -7,7 +7,11 @@ namespace DummyShared
 {
     public enum PlayerAction : byte
     {
-        Attack
+        Attack,
+        WalkNorth,
+        WalkEast,
+        WalkSouth,
+        WalkWest,
     }
 
     public class JoinPacket { }
