@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using DummyShared;
 using Godot;
 using LiteNetLib;
 using LiteNetLib.Utils;
+using Newtonsoft.Json;
 
 public partial class DummyClient : Node, INetEventListener
 {
@@ -19,6 +21,21 @@ public partial class DummyClient : Node, INetEventListener
 
     private DummyPlayerMachine playerMachine;
 
+    public readonly struct ActionsEntry
+    {
+        public ActionsEntry(int tick, List<PlayerAction> actions)
+        {
+            Tick = tick;
+            Actions = actions;
+        }
+
+        public int Tick { get; }
+        public List<PlayerAction> Actions { get; }
+    }
+
+    public ActionsEntry[] ActionHistory = new ActionsEntry[60];
+    private ActionsEntry currentActions;
+
     [Export]
     private DummyInputHandler inputHandler;
 
@@ -29,6 +46,7 @@ public partial class DummyClient : Node, INetEventListener
     {
         ticksElapsed = 0;
         joined = false;
+        currentActions = new ActionsEntry(ticksElapsed, new List<PlayerAction>());
 
         Connect();
     }
@@ -38,6 +56,13 @@ public partial class DummyClient : Node, INetEventListener
         if (joined)
         {
             ticksElapsed += 1;
+            ActionHistory[ticksElapsed % 20] = currentActions;
+            currentActions = new ActionsEntry(ticksElapsed, new List<PlayerAction>());
+
+            if (ticksElapsed % 20 == 0)
+            {
+                GD.Print(JsonConvert.SerializeObject(ActionHistory));
+            }
         }
     }
 
@@ -76,6 +101,7 @@ public partial class DummyClient : Node, INetEventListener
 
     public void SendPlayerAction(PlayerAction action)
     {
+        currentActions.Actions.Add(action);
         // We want to send actions unreliably to get them to the server ASAP
         // Will suck if these are lost, so we probably need to continuously
         // send a buffer of all actions and the tick at which they occurred
