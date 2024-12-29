@@ -5,7 +5,7 @@ using Godot;
 public partial class DummyPlayerMachine : Node
 {
     public static PackedScene playerScene = GD.Load<PackedScene>(
-        "res://scenes/prefabs/dummy_player.tscn"
+        "res://scenes/prefabs/player.tscn"
     );
 
     public const int ATTACK_DURATION_TICKS = 120;
@@ -26,14 +26,14 @@ public partial class DummyPlayerMachine : Node
 
     private float X { get; set; } = 0;
     private float Y { get; set; } = 0;
-    private float Speed { get; set; } = 4.0f;
+    private float Speed { get; set; } = 2.0f;
 
     [Export]
-    private Node player;
+    public Node2D player;
 
     public DummyPlayerMachine()
     {
-        player = playerScene.Instantiate();
+        player = playerScene.Instantiate<Node2D>();
         AddChild(player);
     }
 
@@ -122,7 +122,7 @@ public partial class DummyPlayerMachine : Node
 
     public override void _Process(double delta)
     {
-        player.GetNode<Node2D>("Node2D").Position = new Vector2(X, Y);
+        player.Position = new Vector2(X, Y);
     }
 
     public void HandleAction(PlayerAction action)

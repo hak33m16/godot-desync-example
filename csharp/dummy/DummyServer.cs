@@ -42,6 +42,8 @@ public partial class DummyServer : Node, INetEventListener
 
     public override void _Ready()
     {
+        // Engine.PhysicsTicksPerSecond = 20;
+
         writer = new NetDataWriter();
         packetProcessor = new NetPacketProcessor();
         packetProcessor.SubscribeReusable<JoinPacket, NetPeer>(OnJoinReceived);
@@ -71,10 +73,41 @@ public partial class DummyServer : Node, INetEventListener
         AddChild(playerInstance);
         PrintTree();
 
+
+        // idk wtf I was even doing here... look back at the packets to see what I wanted
+
+        // maybe we should just start over from scratch?
+
+        // uint[] playerIds = new uint[players.Count];
+        // Vector2[] playerPositions = new Vector2[players.Count];
+        // var index = 0;
+        // foreach (var player in players)
+        // {
+        //     var node2d = player.Value.playerNode.player.GetNode<Node2D>("Node2D");
+
+        //     playerIds[index] = player.Key;
+        //     playerPositions[index] = new Vector2(node2d.Position.X, node2d.Position.Y);
+
+        //     index += 1;
+        // }
+
+        foreach (var player in players)
+        {
+            // GD.Print($"Sending peer {(uint)player.}");
+            SendPacket(
+                new RemotePlayerJoinPacket
+                {
+                    pid = player.Key,
+                },
+                player.Value.peer,
+                DeliveryMethod.ReliableOrdered
+            );
+        }
+
         players[(uint)peer.Id] = new ServerPlayer { peer = peer, playerNode = playerInstance };
 
         SendPacket(
-            new JoinAcceptPacket { pid = (uint)peer.Id },
+            new JoinAcceptPacket { pid = (uint)peer.Id, serverTicksElapsed = ticksElapsed },
             peer,
             DeliveryMethod.ReliableOrdered
         );
@@ -84,6 +117,17 @@ public partial class DummyServer : Node, INetEventListener
     {
         // GD.Print($"Received player action {packet.action} from (pid: {(uint)peer.Id})");
         var player = players[(uint)peer.Id];
+
+        // drop it?
+        if (packet.clientTick < ticksElapsed)
+        {
+            GD.Print($"client tick ({packet.clientTick}) is behind server tick ({ticksElapsed})");
+
+            // we know this is the RTT since its our local machine
+            int rtt = ticksElapsed - packet.clientTick;
+
+            SendPacket(new SyncPacket { serverTicksElapsed = ticksElapsed, newClientTick = ticksElapsed + (rtt / 2) }, peer, DeliveryMethod.Unreliable);
+        }
 
         // Soooo we probably need to change the action packet to include the action history info from the client
         //
@@ -143,6 +187,9 @@ public partial class DummyServer : Node, INetEventListener
     {
         GD.Print("Peer disconnected: " + peer.Id);
         // Probably want to free the node, no?
+        ServerPlayer player = players.GetValueOrDefault((uint)peer.Id);
+        player.playerNode.QueueFree();
+
         players.Remove((uint)peer.Id);
     }
 

@@ -13,3 +13,6 @@ inputHandler = NodePath("../InputHandler")
 script = ExtResource("3_j03jq")
 
 [node name="Players" type="Node" parent="."]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(4, 4)

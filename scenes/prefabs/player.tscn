@@ -1,0 +1,34 @@
+[gd_scene load_steps=5 format=3 uid="uid://nutpqgcrk78r"]
+
+[ext_resource type="Texture2D" uid="uid://cekcbv7kls3yu" path="res://resources/character_spritesheet.png" id="1_de8ex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_n4m60"]
+size = Vector2(14, 12)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qrfcs"]
+atlas = ExtResource("1_de8ex")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_kga6n"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_qrfcs")
+}],
+"loop": true,
+"name": &"idle_south",
+"speed": 5.0
+}]
+
+[node name="Player" type="Node2D"]
+
+[node name="CharacterBody2D" type="CharacterBody2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CharacterBody2D"]
+position = Vector2(0, 4)
+shape = SubResource("RectangleShape2D_n4m60")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_kga6n")
+animation = &"idle_south"
