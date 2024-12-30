@@ -1,36 +1,25 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using DummyShared;
 using Godot;
 using LiteNetLib;
 using LiteNetLib.Utils;
+using Newtonsoft.Json;
 
 public partial class DummyServer : Node, INetEventListener
 {
-    public readonly struct ActionsEntry
-    {
-        public ActionsEntry(int tick, List<PlayerAction> actions)
-        {
-            Tick = tick;
-            Actions = actions;
-        }
-
-        public int Tick { get; }
-        public List<PlayerAction> Actions { get; }
-    }
 
     public class ServerPlayer
     {
         public NetPeer peer;
-        public DummyPlayerMachine playerNode;
-        public ActionsEntry[] ActionHistory = new ActionsEntry[60];
-        public ActionsEntry CurrentActions;
+        public Node2D playerNode;
     }
 
     public static PackedScene playerScene = GD.Load<PackedScene>(
-        "res://scenes/dummy_player_machine.tscn"
+        "res://scenes/prefabs/player.tscn"
     );
 
     private NetDataWriter writer;
@@ -38,7 +27,9 @@ public partial class DummyServer : Node, INetEventListener
     private Dictionary<uint, ServerPlayer> players = new();
     private NetManager server;
 
-    private int ticksElapsed = 0;
+    private int TicksElapsed { get; set; } = 0;
+
+    private float Speed = 2.0f;
 
     public override void _Ready()
     {
@@ -47,7 +38,9 @@ public partial class DummyServer : Node, INetEventListener
         writer = new NetDataWriter();
         packetProcessor = new NetPacketProcessor();
         packetProcessor.SubscribeReusable<JoinPacket, NetPeer>(OnJoinReceived);
-        packetProcessor.SubscribeReusable<PlayerActionPacket, NetPeer>(OnPlayerActionReceived);
+        // packetProcessor.SubscribeReusable<PlayerActionPacket, NetPeer>(OnPlayerActionReceived);
+        packetProcessor.SubscribeReusable<PlayerActionsPacket, NetPeer>(OnPlayerActionsReceived);
+        // packetProcessor.SubscribeReusable<PlayerPositionsPacket, NetPeer>(OnPlayerActionsReceived);
 
         server = new NetManager(this) { AutoRecycle = true, };
         GD.Print("Starting server");
@@ -69,113 +62,86 @@ public partial class DummyServer : Node, INetEventListener
     {
         GD.Print($"Received join from (pid: {(uint)peer.Id})");
 
-        DummyPlayerMachine playerInstance = playerScene.Instantiate() as DummyPlayerMachine;
+        var playerInstance = playerScene.Instantiate<Node2D>();
         AddChild(playerInstance);
         PrintTree();
 
-
-        // idk wtf I was even doing here... look back at the packets to see what I wanted
-
-        // maybe we should just start over from scratch?
-
-        // uint[] playerIds = new uint[players.Count];
-        // Vector2[] playerPositions = new Vector2[players.Count];
-        // var index = 0;
-        // foreach (var player in players)
-        // {
-        //     var node2d = player.Value.playerNode.player.GetNode<Node2D>("Node2D");
-
-        //     playerIds[index] = player.Key;
-        //     playerPositions[index] = new Vector2(node2d.Position.X, node2d.Position.Y);
-
-        //     index += 1;
-        // }
-
-        foreach (var player in players)
-        {
-            // GD.Print($"Sending peer {(uint)player.}");
-            SendPacket(
-                new RemotePlayerJoinPacket
-                {
-                    pid = player.Key,
-                },
-                player.Value.peer,
-                DeliveryMethod.ReliableOrdered
-            );
-        }
-
-        players[(uint)peer.Id] = new ServerPlayer { peer = peer, playerNode = playerInstance };
-
         SendPacket(
-            new JoinAcceptPacket { pid = (uint)peer.Id, serverTicksElapsed = ticksElapsed },
+            new JoinAcceptPacket { pid = (uint)peer.Id },
             peer,
             DeliveryMethod.ReliableOrdered
         );
+
+        players[(uint)peer.Id] = new ServerPlayer { peer = peer, playerNode = playerInstance };
+
+        BroadcastPlayerPositions();
     }
 
-    public void OnPlayerActionReceived(PlayerActionPacket packet, NetPeer peer)
+    public void BroadcastPlayerPositions()
     {
-        // GD.Print($"Received player action {packet.action} from (pid: {(uint)peer.Id})");
-        var player = players[(uint)peer.Id];
-
-        // drop it?
-        if (packet.clientTick < ticksElapsed)
+        List<uint> pids = new();
+        List<Vector2> positions = new();
+        foreach (var entry in players)
         {
-            GD.Print($"client tick ({packet.clientTick}) is behind server tick ({ticksElapsed})");
-
-            // we know this is the RTT since its our local machine
-            int rtt = ticksElapsed - packet.clientTick;
-
-            SendPacket(new SyncPacket { serverTicksElapsed = ticksElapsed, newClientTick = ticksElapsed + (rtt / 2) }, peer, DeliveryMethod.Unreliable);
+            pids.Add(entry.Key);
+            positions.Add(entry.Value.playerNode.GetNode<CharacterBody2D>("CharacterBody2D").Position);
         }
 
-        // Soooo we probably need to change the action packet to include the action history info from the client
-        //
-        // But once it includes it, what are we gonna do?
-        //
-        // In general, we want the client to be just far enough behind us that by the time their packet gets
-        // to the server, it's perfectly ready to be executed
-        //
-        // Obviously that can't happen in reality
-        //
-        // So say the client is at tick 100, client presses W, this generates an action at
-        // tick 100 containing W. By the time it arrives to the server, the server is just now
-        // about to process tick 100. That's the best case scenario here.
-        //
-        // The packet could arrive after the server time of 100, which would mean we have to ignore
-        // the contents of it. The server will never go back in time. Sorry, not sorry, you missed
-        // your chance to tell us what you wanted.
-        // So here we're saying we never ever want the client to get too far behind the server. If they're
-        // sending us information from the past, either their clock has drifted, in which case we need to
-        // resynchronize it, or their hardware can't keep up.
-        //
-        // The packet could also arrive before the server reaches 100. How far before this should
-        // we accept an incoming packet? Presumably this locks the player into performing the actions
-        // that are within that packet at that tick.
-        // This does have some interesting implications however, because it means the client is actually
-        // processing too far into the future. This can also happen from clock drift, in which case we would
-        // also need to resynchronize the clients tick clock. Without doing this, the client may eventually
-        // become permanently out of sync/too far ahead from the server, in which case we'd be stuck rejecting
-        // packets because they're much too far in the future.
-        //
-        // Overall, if packets arrive before us, too little too late. If they arrive after us, we'll
-        // queue them up, but only if they're like just about to happen.
-        //
-        // And none of these even talks about state reconciliation...
-        player.CurrentActions.Actions.Add(packet.action);
-        player.playerNode.HandleAction(packet.action);
+        GD.Print($"pids to broadcast: {JsonConvert.SerializeObject(pids)}");
+        GD.Print($"positions to broadcast: {JsonConvert.SerializeObject(positions)}");
+
+        var packet = PlayerPositionsUpdatePacket.FromVector2Array(pids.ToArray(), positions.ToArray());
+        foreach (var entry in players)
+        {
+            SendPacket(packet, entry.Value.peer, DeliveryMethod.Unreliable);
+        }
+    }
+
+    public void OnPlayerActionsReceived(PlayerActionsPacket packet, NetPeer peer)
+    {
+        var body = players[(uint)peer.Id].playerNode.GetNode<CharacterBody2D>("CharacterBody2D");
+
+        Vector2 direction = Vector2.Zero;
+        if (packet.Actions.Contains((byte)PlayerAction.WalkEast))
+        {
+            direction.X += 1;
+        }
+        if (packet.Actions.Contains((byte)PlayerAction.WalkWest))
+        {
+            direction.X -= 1;
+        }
+        if (packet.Actions.Contains((byte)PlayerAction.WalkNorth))
+        {
+            direction.Y -= 1;
+        }
+        if (packet.Actions.Contains((byte)PlayerAction.WalkSouth))
+        {
+            direction.Y += 1;
+        }
+
+        if (direction != Vector2.Zero)
+        {
+            direction = direction.Normalized();
+
+            body.Velocity = direction * Speed;
+            body.Position += body.Velocity;
+        }
     }
 
     public override void _PhysicsProcess(double delta)
     {
+        if (server == null)
+            return;
+
         server.PollEvents();
 
-        ticksElapsed += 1;
-        foreach (ServerPlayer player in players.Values)
+        // Send out player positions every .5 seconds
+        if (TicksElapsed % 30 == 0)
         {
-            player.ActionHistory[ticksElapsed % 20] = player.CurrentActions;
-            player.CurrentActions = new ActionsEntry(ticksElapsed, new List<PlayerAction>());
+            BroadcastPlayerPositions();
         }
+
+        TicksElapsed++;
     }
 
     void INetEventListener.OnPeerConnected(NetPeer peer)
@@ -186,7 +152,7 @@ public partial class DummyServer : Node, INetEventListener
     void INetEventListener.OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
         GD.Print("Peer disconnected: " + peer.Id);
-        // Probably want to free the node, no?
+
         ServerPlayer player = players.GetValueOrDefault((uint)peer.Id);
         player.playerNode.QueueFree();
 

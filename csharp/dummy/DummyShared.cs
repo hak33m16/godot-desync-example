@@ -1,4 +1,5 @@
 // using System;
+using System;
 using System.Numerics;
 using Godot;
 using LiteNetLib;
@@ -20,16 +21,52 @@ namespace DummyShared
     public class JoinAcceptPacket
     {
         public uint pid { get; set; }
-        public int serverTicksElapsed { get; set; }
-        // public uint[] playerIds { get; set; }
-        // public Godot.Vector2[] playerPositions { get; set; }
     }
 
     public class PlayerActionPacket
     {
-        // public PlayerAction[] actions { get; set; }
-        public PlayerAction action { get; set; }
-        public int clientTick { get; set; }
+        public PlayerAction Action { get; set; }
+    }
+
+    public class PlayerActionsPacket
+    {
+        public byte[] Actions { get; set; }
+    }
+
+    public class PlayerPositionsUpdatePacket
+    {
+        public uint[] PlayerIds { get; set; }
+        public float[] PositionsX { get; set; }
+        public float[] PositionsY { get; set; }
+
+        public static PlayerPositionsUpdatePacket FromVector2Array(uint[] playerIds, Godot.Vector2[] positions)
+        {
+            var packet = new PlayerPositionsUpdatePacket
+            {
+                PlayerIds = playerIds,
+                PositionsX = new float[positions.Length],
+                PositionsY = new float[positions.Length]
+            };
+
+            for (int i = 0; i < positions.Length; i++)
+            {
+                packet.PositionsX[i] = positions[i].X;
+                packet.PositionsY[i] = positions[i].Y;
+            }
+
+            return packet;
+        }
+
+        public Godot.Vector2[] ToVector2Array()
+        {
+            var positions = new Godot.Vector2[PositionsX.Length];
+            for (int i = 0; i < PositionsX.Length; i++)
+            {
+                positions[i] = new Godot.Vector2(PositionsX[i], PositionsY[i]);
+            }
+
+            return positions;
+        }
     }
 
     public class RemotePlayerJoinPacket

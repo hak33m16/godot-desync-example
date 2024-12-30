@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -10,8 +11,8 @@ using Newtonsoft.Json;
 
 public partial class DummyClient : Node, INetEventListener
 {
-    public static PackedScene playerMachineScene = GD.Load<PackedScene>(
-        "res://scenes/dummy_player_machine.tscn"
+    public static PackedScene playerScene = GD.Load<PackedScene>(
+        "res://scenes/prefabs/player.tscn"
     );
 
     private NetManager client;
@@ -19,63 +20,67 @@ public partial class DummyClient : Node, INetEventListener
     private NetDataWriter writer;
     private NetPacketProcessor packetProcessor;
 
-    private DummyPlayerMachine playerMachine;
+    private Node2D playerSelf;
+    private Dictionary<uint, Node2D> players = new();
 
-    private Dictionary<uint, DummyPlayerMachine> players = new();
+    private float Speed = 2.0f;
 
-    // public readonly struct ActionsEntry
-    // {
-    //     public ActionsEntry(int tick, List<PlayerAction> actions)
-    //     {
-    //         Tick = tick;
-    //         Actions = actions;
-    //     }
-
-    //     public int Tick { get; }
-    //     public List<PlayerAction> Actions { get; }
-    // }
-
-    // public ActionsEntry[] ActionHistory = new ActionsEntry[60];
-    // private ActionsEntry currentActions;
-
-    [Export]
-    private DummyInputHandler inputHandler;
-
-    private int ticksElapsed = 0;
-    public bool joined { get; set; }
+    private bool Joined { get; set; } = false;
+    private uint PeerId { get; set; }
 
     public override void _Ready()
     {
-        // Engine.PhysicsTicksPerSecond = 20;
-
-        // ticksElapsed = 0;
-        joined = false;
-        // currentActions = new ActionsEntry(ticksElapsed, new List<PlayerAction>());
-
         Connect();
     }
 
     public override void _PhysicsProcess(double delta)
     {
-        if (joined)
+        if (!Joined)
         {
-            ticksElapsed += 1;
-            // ActionHistory[ticksElapsed % 20] = currentActions;
-            // currentActions = new ActionsEntry(ticksElapsed, new List<PlayerAction>());
+            return;
+        }
 
-            // if (ticksElapsed % 20 == 0)
-            // {
-            //     GD.Print(JsonConvert.SerializeObject(ActionHistory));
-            // }
+        List<byte> tickActions = new();
+
+        var body = playerSelf.GetNode<CharacterBody2D>("CharacterBody2D");
+
+        Vector2 direction = Vector2.Zero;
+        if (Input.IsActionPressed("walk_east"))
+        {
+            tickActions.Add((byte)PlayerAction.WalkEast);
+            direction.X += 1;
+        }
+        if (Input.IsActionPressed("walk_west"))
+        {
+            tickActions.Add((byte)PlayerAction.WalkWest);
+            direction.X -= 1;
+        }
+        if (Input.IsActionPressed("walk_north"))
+        {
+            tickActions.Add((byte)PlayerAction.WalkNorth);
+            direction.Y -= 1;
+        }
+        if (Input.IsActionPressed("walk_south"))
+        {
+            tickActions.Add((byte)PlayerAction.WalkSouth);
+            direction.Y += 1;
+        }
+
+        SendPacket(
+            new PlayerActionsPacket { Actions = tickActions.ToArray() },
+            DeliveryMethod.Unreliable
+        );
+
+        if (direction != Vector2.Zero)
+        {
+            direction = direction.Normalized();
+
+            body.Velocity = direction * Speed;
+            body.Position += body.Velocity;
         }
     }
 
     public override void _Process(double delta)
-    {
-        client?.PollEvents();
-    }
-
-    public void PollEvents()
     {
         client?.PollEvents();
     }
@@ -85,8 +90,7 @@ public partial class DummyClient : Node, INetEventListener
         writer = new NetDataWriter();
         packetProcessor = new NetPacketProcessor();
         packetProcessor.SubscribeReusable<JoinAcceptPacket>(OnJoinAccept);
-        packetProcessor.SubscribeReusable<SyncPacket>(OnSync);
-        packetProcessor.SubscribeReusable<RemotePlayerJoinPacket>(OnRemotePlayerJoin);
+        packetProcessor.SubscribeReusable<PlayerPositionsUpdatePacket>(OnPlayerPositionsUpdate);
 
         client = new NetManager(this) { AutoRecycle = true, };
         client.Start();
@@ -105,59 +109,56 @@ public partial class DummyClient : Node, INetEventListener
         }
     }
 
-    // public void SendPlayerAction(PlayerAction[] actions)
-    // {
-    //     // currentActions.Actions.Add(action);
-    //     // We want to send actions unreliably to get them to the server ASAP
-    //     // Will suck if these are lost, so we probably need to continuously
-    //     // send a buffer of all actions and the tick at which they occurred
-    //     SendPacket(
-    //         new PlayerActionPacket { actions = actions },
-    //         // new PlayerActionPacket { action = action, clientTick = ticksElapsed },
-    //         DeliveryMethod.Unreliable
-    //     );
-    // }
-
     public void SendPlayerAction(PlayerAction action)
     {
-        // currentActions.Actions.Add(action);
-        // We want to send actions unreliably to get them to the server ASAP
-        // Will suck if these are lost, so we probably need to continuously
-        // send a buffer of all actions and the tick at which they occurred
         SendPacket(
-            new PlayerActionPacket { action = action, clientTick = ticksElapsed },
+            new PlayerActionPacket { Action = action },
             DeliveryMethod.Unreliable
         );
     }
 
-    public void OnRemotePlayerJoin(RemotePlayerJoinPacket packet)
-    {
-        GD.Print($"Remote player joining (pid: {packet.pid})");
-
-        var remoteMachine = playerMachineScene.Instantiate() as DummyPlayerMachine;
-        GetNode("../Players").AddChild(remoteMachine);
-        GetTree().Root.PrintTree();
-
-        players.Add(packet.pid, remoteMachine);
-    }
-
     public void OnJoinAccept(JoinAcceptPacket packet)
     {
-        GD.Print($"Join accepted by server (pid: {packet.pid}) - server at tick {packet.serverTicksElapsed}");
-        ticksElapsed = packet.serverTicksElapsed;
-        joined = true;
+        GD.Print($"Join accepted by server (pid: {packet.pid})");
+        Joined = true;
 
-        playerMachine = playerMachineScene.Instantiate() as DummyPlayerMachine;
-        GetNode("../Players").AddChild(playerMachine);
+        playerSelf = playerScene.Instantiate<Node2D>();
+        GetNode("../Players").AddChild(playerSelf);
         GetTree().Root.PrintTree();
 
-        inputHandler.playerClient = this;
-        inputHandler.playerMachine = playerMachine;
+        PeerId = packet.pid;
     }
 
-    public void OnSync(SyncPacket packet)
+    public void OnPlayerPositionsUpdate(PlayerPositionsUpdatePacket packet)
     {
-        ticksElapsed = packet.newClientTick;
+        var positions = packet.ToVector2Array();
+
+        var index = 0;
+        foreach (var pid in packet.PlayerIds)
+        {
+            if (pid == PeerId)
+            {
+                // TODO: This is awful, we should not be incrementing this inside the loop
+                index++;
+                continue;
+            }
+
+            if (!players.ContainsKey(pid))
+            {
+                var newPlayer = playerScene.Instantiate<Node2D>();
+                GetNode("../Players").AddChild(newPlayer);
+                PrintTree();
+
+                players[pid] = newPlayer;
+                newPlayer.GetNode<CharacterBody2D>("CharacterBody2D").Position = positions[index];
+            }
+            else
+            {
+                players[pid].GetNode<CharacterBody2D>("CharacterBody2D").Position = positions[index];
+            }
+
+            index++;
+        }
     }
 
     void INetEventListener.OnPeerConnected(NetPeer peer)

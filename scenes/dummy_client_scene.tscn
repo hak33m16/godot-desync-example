@@ -1,18 +1,16 @@
 [gd_scene load_steps=3 format=3 uid="uid://djrdmnuxvxv4n"]
 
 [ext_resource type="Script" path="res://csharp/dummy/DummyClient.cs" id="1_q4cd1"]
-[ext_resource type="Script" path="res://csharp/dummy/DummyInputHandler.cs" id="3_j03jq"]
+[ext_resource type="Texture2D" uid="uid://dgymwbmtw8ot4" path="res://icon.svg" id="2_5w7om"]
 
 [node name="DummyClientScene" type="Node2D"]
 
-[node name="Client" type="Node" parent="." node_paths=PackedStringArray("inputHandler")]
+[node name="Client" type="Node" parent="."]
 script = ExtResource("1_q4cd1")
-inputHandler = NodePath("../InputHandler")
-
-[node name="InputHandler" type="Node" parent="."]
-script = ExtResource("3_j03jq")
 
 [node name="Players" type="Node" parent="."]
 
-[node name="Camera2D" type="Camera2D" parent="."]
-zoom = Vector2(4, 4)
+[node name="Icon" type="Sprite2D" parent="."]
+z_index = -1
+position = Vector2(-152, -1)
+texture = ExtResource("2_5w7om")
