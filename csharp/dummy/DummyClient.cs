@@ -20,16 +20,24 @@ public partial class DummyClient : Node, INetEventListener
     private NetDataWriter writer;
     private NetPacketProcessor packetProcessor;
 
-    private Node2D playerSelf;
-    private Dictionary<uint, Node2D> players = new();
+    private class PlayerInfo
+    {
+        public Node2D PlayerNode { get; set; }
+        public Vector2 ServerPosition { get; set; }
+    }
 
-    private float Speed = 2.0f;
+    private Node2D playerSelf;
+    private Dictionary<uint, PlayerInfo> players = new();
+
+    private float Speed = 5.0f;
 
     private bool Joined { get; set; } = false;
     private uint PeerId { get; set; }
 
     public override void _Ready()
     {
+        Engine.PhysicsTicksPerSecond = 20;
+
         Connect();
     }
 
@@ -82,7 +90,39 @@ public partial class DummyClient : Node, INetEventListener
 
     public override void _Process(double delta)
     {
-        client?.PollEvents();
+        if (client == null)
+            return;
+
+        client.PollEvents();
+
+        foreach (var player in players)
+        {
+            // var body = player.Value.PlayerNode.GetNode<CharacterBody2D>("CharacterBody2D");
+            // var currentPosition = body.Position;
+            // var targetPosition = player.Value.ServerPosition;
+
+            // float posDelta = (targetPosition - currentPosition).Length();
+            // float lerpFactor = Mathf.Clamp(posDelta * 0.2f, 0.05f, 0.3f); // Adjust scaling factors as needed
+            // body.Position = currentPosition.Lerp(targetPosition, lerpFactor);
+            // // body.Position = currentPosition.Lerp(targetPosition, 0.1f);
+
+            var visualBody = player.Value.PlayerNode.GetNode<Node2D>("VisualNode2D");
+            // var visualPosition = player.Value.PlayerNode.GetNode<Node2D>("VisualNode2D").Position;
+            // var currentPosition = body.Position;
+            var actualBody = player.Value.PlayerNode.GetNode<CharacterBody2D>("CharacterBody2D");
+
+            float posDelta = (actualBody.Position - visualBody.Position).Length();
+            float lerpFactor = Mathf.Clamp(posDelta * 0.2f, 0.05f, 0.3f); // Adjust scaling factors as needed
+            visualBody.Position = visualBody.Position.Lerp(actualBody.Position, lerpFactor);
+            // body.Position = currentPosition.Lerp(targetPosition, 0.1f);
+        }
+
+        var selfVisualBody = playerSelf.GetNode<Node2D>("VisualNode2D");
+        var selfActualBody = playerSelf.GetNode<CharacterBody2D>("CharacterBody2D");
+
+        float selfPosDelta = (selfActualBody.Position - selfVisualBody.Position).Length();
+        float selfLerpFactor = Mathf.Clamp(selfPosDelta * 0.2f, 0.05f, 0.3f);
+        selfVisualBody.Position = selfVisualBody.Position.Lerp(selfActualBody.Position, selfLerpFactor);
     }
 
     public void Connect()
@@ -133,13 +173,14 @@ public partial class DummyClient : Node, INetEventListener
     {
         var positions = packet.ToVector2Array();
 
-        var index = 0;
+        var index = -1;
         foreach (var pid in packet.PlayerIds)
         {
+            index++;
+
+            // TODO: Still need to account for updating the client player's position relative to the server
             if (pid == PeerId)
             {
-                // TODO: This is awful, we should not be incrementing this inside the loop
-                index++;
                 continue;
             }
 
@@ -149,15 +190,21 @@ public partial class DummyClient : Node, INetEventListener
                 GetNode("../Players").AddChild(newPlayer);
                 PrintTree();
 
-                players[pid] = newPlayer;
+                players[pid] = new PlayerInfo
+                {
+                    PlayerNode = newPlayer,
+                    ServerPosition = positions[index]
+                };
+
                 newPlayer.GetNode<CharacterBody2D>("CharacterBody2D").Position = positions[index];
+                // newPlayer.GetNode<Node2D>("VisualNode2D").Position = positions[index];
             }
             else
             {
-                players[pid].GetNode<CharacterBody2D>("CharacterBody2D").Position = positions[index];
-            }
+                // players[pid].ServerPosition = positions[index];
 
-            index++;
+                players[pid].PlayerNode.GetNode<CharacterBody2D>("CharacterBody2D").Position = positions[index];
+            }
         }
     }
 

@@ -29,11 +29,11 @@ public partial class DummyServer : Node, INetEventListener
 
     private int TicksElapsed { get; set; } = 0;
 
-    private float Speed = 2.0f;
+    private float Speed = 5.0f;
 
     public override void _Ready()
     {
-        // Engine.PhysicsTicksPerSecond = 20;
+        Engine.PhysicsTicksPerSecond = 20;
 
         writer = new NetDataWriter();
         packetProcessor = new NetPacketProcessor();
@@ -135,11 +135,10 @@ public partial class DummyServer : Node, INetEventListener
 
         server.PollEvents();
 
-        // Send out player positions every .5 seconds
-        if (TicksElapsed % 30 == 0)
-        {
-            BroadcastPlayerPositions();
-        }
+        // if (TicksElapsed % 5 == 0)
+        // {
+        BroadcastPlayerPositions();
+        // }
 
         TicksElapsed++;
     }
